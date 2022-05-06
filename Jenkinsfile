@@ -1,32 +1,37 @@
-@Library("app-lib") _
 pipeline {
-  agent any
-
-  tools {
-    maven 'maven3'
-  }
-  options {
-    buildDiscarder logRotator(daysToKeepStr: '10', numToKeepStr: '7')
-  }
-  parameters {
-    choice choices: ['develop', 'qa', 'master'], description: 'Choose the branch to build', name: 'branchName'
-  }
-  stages {
-    stage('Maven Build') {
-      steps {
-        sh 'mvn clean package'
-      }
+    agent any
+    options {
+     buildDiscarder logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '15', numToKeepStr: '5')
     }
-    stage('Deploy to Tomcat') {
-      steps {
-        tomcatDeploy(["172.31.13.38","172.31.13.38","172.31.13.38"],"ec2-user","tomcat-dev")
-      }
+    parameters {
+    string defaultValue: 'develop', description: 'choose develop branch', name: 'branch name'
     }
-  }
-  post {
-    success {
-      archiveArtifacts artifacts: 'target/*.war'
-      cleanWs()
+    stages {
+        stage('Git Checkout') {
+            steps {
+                git credentialsId: 'Git-hub', url: 'https://github.com/anandgdk/myapp'
+            }
+        }
+        
+        stage('Maven Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+        
+        stage('Tomcat-dev') {
+            steps {
+                sshagent(['ec2-user']) {
+                    //copy war file
+                
+                sh 'scp -o StrictHostKeyChecking=no target/*.war ec2-user@172.31.2.64:/opt/tomcat8/webapps/app.war'
+                //stop tomcat
+                sh "ssh ec2-user@172.31.2.64 /opt/tomcat8/bin/shutdown.sh"
+                //start tomcat
+                sh "ssh ec2-user@172.31.2.64 /opt/tomcat8/bin/startup.sh"
+                
+                 }
+            }
+        }
     }
-  }
-  }
+}
